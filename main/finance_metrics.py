@@ -8,6 +8,9 @@ import datetime
 from typing import Dict, Union, Tuple
 
 
+PERIOD = 252
+
+
 def compute_annual_returns(dbm: database_manager.DatabaseManager, for_bloom: bool) -> Dict[str, pd.DataFrame]:
     """
     Computes annual returns for all assets.
@@ -23,7 +26,7 @@ def compute_annual_returns(dbm: database_manager.DatabaseManager, for_bloom: boo
         df, info = dbm.get_table(tbl_name)
 
         if df is not None:
-            df['annual_ret'] = df['PX_LAST'].pct_change(periods=252)
+            df['annual_ret'] = df['PX_LAST'].pct_change(periods=PERIOD)
             df['annual_ret_sign'] = (df['annual_ret'] > 0)
             df['annual_ret_sign'] *= 2
             df['annual_ret_sign'] -= 1
@@ -149,12 +152,12 @@ def compute_cvol(dbm: database_manager.DatabaseManager, sigma_target: float, for
         if table_present[i] == 1:
             cummulative_strategy['daily_ret_' + tbl_name] = cummulative_strategy['PX_LAST_' + tbl_name].pct_change()
             cummulative_strategy['annual_ret_' + tbl_name] = cummulative_strategy['PX_LAST_' + tbl_name].pct_change(
-                periods=252)
+                periods=PERIOD)
             cummulative_strategy['annual_ret_' + tbl_name] = (cummulative_strategy['annual_ret_' + tbl_name] > 0)
             cummulative_strategy['annual_ret_' + tbl_name] *= 2
             cummulative_strategy['annual_ret_' + tbl_name] -= 1
             cummulative_strategy['rolling_std_' + tbl_name] = cummulative_strategy['daily_ret_' + tbl_name].rolling(
-                252).std() * np.sqrt(252)
+                PERIOD).std() * np.sqrt(PERIOD)
             cummulative_strategy['ret_cvol_' + tbl_name] = cummulative_strategy['daily_ret_' + tbl_name] /  \
                                                            cummulative_strategy['rolling_std_' + tbl_name]
             cummulative_strategy['ret_cvol_' + tbl_name] = cummulative_strategy['annual_ret_' + tbl_name] / \
