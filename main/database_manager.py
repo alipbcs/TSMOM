@@ -378,6 +378,7 @@ class DatabaseManager(object):
 
             if result is not None:
                 df = pd.DataFrame(result, columns=['table_name', 'cotract_name'])
+                df.set_index('table_name', inplace=True)
 
                 return df
 
