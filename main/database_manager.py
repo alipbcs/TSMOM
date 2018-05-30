@@ -108,6 +108,7 @@ class DatabaseManager(object):
         self.__dict__ = self.__shared_state
 
         if not hasattr(self, 'con'):
+            print(ROOT_DIR)
             self.con = sqlite3.connect(ROOT_DIR + '/data/SCF.db')
 
         if not hasattr(self, 'quandl_dataset_names'):
