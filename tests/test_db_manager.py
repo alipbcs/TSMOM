@@ -42,3 +42,10 @@ class TestDatabaseManager(unittest.TestCase):
         info = self.dbm.get_info('quandl_CME_CL1_OR')
 
         self.assertIsNotNone(info)
+
+    def test_get_asset_by_type(self):
+        df = self.dbm.get_assets_by_type('Equity')
+        self.assertIsNotNone(df)
+
+        df = self.dbm.get_assets_by_type('Equity', 'Developed')
+        self.assertIsNotNone(df)
