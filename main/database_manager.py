@@ -353,6 +353,35 @@ class DatabaseManager(object):
 
         return None
 
+    def get_assets_by_type(self, asset_type: str, asset_subtype: str = None) -> Optional[pd.DataFrame]:
+        """
+        Retrieves contract name and corrsponding table names based on given types.
+        :param asset_type: contract type.
+        :param asset_subtype: contract subtype.
+        :return: a pandas Dataframe.
+        """
+        cursor = None
+
+        if asset_type is not None:
+            if asset_subtype is not None:
+                cursor = self.con.execute('''SELECT table_name, contract_name
+                                    FROM bloom_info
+                                    WHERE type=? and subtype=?''', (asset_type, asset_subtype))
+
+            else:
+                cursor = self.con.execute('''SELECT table_name, contract_name
+                                    FROM bloom_info
+                                    WHERE type=? ''', (asset_type,))
+
+            result = cursor.fetchall()
+
+            if result is not None:
+                df = pd.DataFrame(result, columns=['table_name', 'cotract_name'])
+
+                return df
+
+        return None
+
     def __get_table_bloom(self, tbl_name: str) -> Union[Tuple[pd.DataFrame, Tuple[str, str, str, str, str]], Tuple[None, None]]:
         """
         Retrieves bloom table from database.

@@ -105,4 +105,4 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-example_runner.py
+.example_runner.py
