@@ -19,18 +19,18 @@ class TimeVaryingPortfolioStrategy(object):
         st_2 = main.portfolio_strategy.TSMOMStrategy(dbm, df, 0.4)
         res_2 = st_2.compute_strategy()
     """
-    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, verbose=False):
+    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, verbose=False):
         self.dbm = dbm
         self.data = data
         self.n_t = None
         self.aggreagated_assets = None
         self.table_in_assets = []
         self.verbose = verbose
+        self.sigma_target = sigma_target
 
     def aggregate_assets(self):
         """
-
-        :return:
+        Joins PX_LAST of all assets.
         """
         agg_assets, _ = self.dbm.get_table(self.data.index[0])
 
@@ -47,10 +47,10 @@ class TimeVaryingPortfolioStrategy(object):
                 print('Progress: {0:.2f}%'.format(i / self.data.shape[0]))
 
             tbl_name = self.data.index[t]
-            df_curr, info = self.dbm.get_table(tbl_name)
+            df_curr, _ = self.dbm.get_table(tbl_name)
 
             if df_curr is not None:
-                if df_curr.shape[0] < 260:
+                if df_curr.shape[0] < LOOKBACK_PERIOD + 1:
                     i += 1
                     continue
 
@@ -68,10 +68,9 @@ class TimeVaryingPortfolioStrategy(object):
         self.aggreagated_assets = agg_assets
         self.table_in_assets = table_present
 
-    def compute_accumulated_returns(self):
+    def compute_annualized_returns(self):
         """
-
-        :return:
+        Computes annualized retrurn and rollign standard deviation for lookback period.
         """
         i = 0
 
@@ -83,28 +82,27 @@ class TimeVaryingPortfolioStrategy(object):
 
             if self.table_in_assets[i] == 1:
                 curr_daily_ret = 'daily_ret_' + tbl_name
-                curr_last = 'PX_LAST_' + tbl_name
+                curr_last = self.aggreagated_assets['PX_LAST_' + tbl_name]
                 curr_annual = 'annual_ret_' + tbl_name
                 curr_std = 'rolling_std_' + tbl_name
 
-                self.aggreagated_assets[curr_daily_ret] = self.aggreagated_assets[curr_last].pct_change()
-                self.aggreagated_assets[curr_annual] = self.aggreagated_assets[curr_last].pct_change(periods=LOOKBACK_PERIOD)
+                self.aggreagated_assets[curr_daily_ret] = curr_last.pct_change()
+                self.aggreagated_assets[curr_annual] = curr_last.pct_change(periods=LOOKBACK_PERIOD)
                 self.aggreagated_assets[curr_std] = self.aggreagated_assets[curr_daily_ret].rolling(LOOKBACK_PERIOD).std() \
                                                     * np.sqrt(LOOKBACK_PERIOD)
+                self.aggreagated_assets[curr_std][self.aggreagated_assets[curr_std] < (self.sigma_target / 10.0)] = self.sigma_target / 10.0
 
             i += 1
 
     @abstractmethod
     def compute_strategy(self):
         self.aggregate_assets()
-        self.compute_accumulated_returns()
-        pass
+        self.compute_annualized_returns()
 
 
 class ConstantVolatilityStrategy(TimeVaryingPortfolioStrategy):
     def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target):
-        super().__init__(dbm, data)
-        self.sigma_target = sigma_target
+        super().__init__(dbm, data, sigma_target)
 
     def compute_strategy(self):
         super().compute_strategy()
@@ -121,23 +119,24 @@ class ConstantVolatilityStrategy(TimeVaryingPortfolioStrategy):
                 curr_daily_ret = 'daily_ret_' + tbl_name
                 curr_last = 'PX_LAST_' + tbl_name
                 curr_std = 'rolling_std_' + tbl_name
+                curr_annual = 'annual_ret_' + tbl_name
 
-                self.aggreagated_assets['ret_cvol_' + tbl_name] = self.aggreagated_assets[curr_daily_ret] /         \
+                self.aggreagated_assets['ret_cvol_' + tbl_name] = self.sigma_target * self.aggreagated_assets[curr_daily_ret] /         \
                                                                   self.aggreagated_assets[curr_std]
-                self.aggreagated_assets.drop(labels=[curr_daily_ret, curr_last, curr_std], axis=1, inplace=True)
+                self.aggreagated_assets.drop(labels=[curr_daily_ret, curr_last, curr_std, curr_annual], axis=1, inplace=True)
 
             i += 1
 
+        self.aggreagated_assets.shift(1)
         self.aggreagated_assets['sum'] = self.aggreagated_assets.sum(axis=1)
-        self.aggreagated_assets['result'] = self.sigma_target * self.aggreagated_assets['sum'].div(self.n_t, axis=0)
+        self.aggreagated_assets['result'] = self.aggreagated_assets['sum'].div(self.n_t, axis=0)
 
         return self.aggreagated_assets[['result']]
 
 
 class TSMOMStrategy(TimeVaryingPortfolioStrategy):
     def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target):
-        super().__init__(dbm, data)
-        self.sigma_target = sigma_target
+        super().__init__(dbm, data, sigma_target)
 
     def compute_strategy(self):
         super().compute_strategy()
@@ -160,13 +159,14 @@ class TSMOMStrategy(TimeVaryingPortfolioStrategy):
                 self.aggreagated_assets[curr_annual] = (self.aggreagated_assets[curr_annual] > 0)
                 self.aggreagated_assets[curr_annual] *= 2
                 self.aggreagated_assets[curr_annual] -= 1
-                self.aggreagated_assets[curr_cvol] = self.aggreagated_assets[curr_daily_ret] / self.aggreagated_assets[curr_std]
-                self.aggreagated_assets['TSMOM' + tbl_name] = self.aggreagated_assets[curr_cvol] * self.aggreagated_assets[curr_annual]
-                self.aggreagated_assets.drop(labels=[curr_daily_ret, curr_last, curr_annual, curr_std], axis=1, inplace=True)
+                self.aggreagated_assets[curr_cvol] = self.sigma_target * self.aggreagated_assets[curr_daily_ret] / self.aggreagated_assets[curr_std]
+                self.aggreagated_assets['TSMOM_' + tbl_name] = self.aggreagated_assets[curr_cvol] * self.aggreagated_assets[curr_annual]
+                self.aggreagated_assets.drop(labels=[curr_daily_ret, curr_last, curr_annual, curr_std, curr_cvol], axis=1, inplace=True)
 
             i += 1
 
+        self.aggreagated_assets.shift(1)
         self.aggreagated_assets['sum'] = self.aggreagated_assets.sum(axis=1)
-        self.aggreagated_assets['result'] = self.sigma_target * self.aggreagated_assets['sum'].div(self.n_t, axis=0)
+        self.aggreagated_assets['result'] = self.aggreagated_assets['sum'].div(self.n_t, axis=0)
 
         return self.aggreagated_assets[['result']]

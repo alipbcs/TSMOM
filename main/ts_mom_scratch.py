@@ -4,7 +4,6 @@ Spyder Editor
 
 This is a temporary script file.
 """
-from main import database_manager, finance_metrics
 import numpy as np
 import pandas as pd
 
