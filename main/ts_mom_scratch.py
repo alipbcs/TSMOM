@@ -62,7 +62,8 @@ std_rolling[std_rolling < sigma_target/10] = sigma_target/10
 # asset weight 
 asset_wt = sigma_target / std_rolling
 annual_ret_signed = ((annual_ret > 0)* 2 )- 1
-asset_wt_signed = annual_ret * asset_wt
+# asset_wt_signed = annual_ret * asset_wt
+asset_wt_signed = annual_ret_signed * asset_wt
 
 asset_wts_actual = asset_wt_signed.div(assets_present, axis=0)
 # you need to shift weights by one day
