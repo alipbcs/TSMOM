@@ -363,8 +363,13 @@ class DatabaseManager(object):
         """
         cursor = None
 
+        assert(asset_type in ['Commodity', 'Equity', 'Interest Rates', 'Currency'])
+
         if asset_type is not None:
             if asset_subtype is not None:
+                assert(asset_subtype in ['Developed', 'Emerging', 'Grains', 'Energy', \
+                                      'Softs', 'Precious Metal', 'Meat', 'Metal'])
+
                 cursor = self.con.execute('''SELECT table_name, contract_name
                                     FROM bloom_info
                                     WHERE type=? and subtype=?''', (asset_type, asset_subtype))
@@ -377,7 +382,7 @@ class DatabaseManager(object):
             result = cursor.fetchall()
 
             if result is not None:
-                df = pd.DataFrame(result, columns=['table_name', 'cotract_name'])
+                df = pd.DataFrame(result, columns=['table_name', 'contract_name'])
                 df.set_index('table_name', inplace=True)
 
                 return df
