@@ -96,7 +96,7 @@ class PlotHelper(object):
 
         self.__cvol['n_t'].plot()
 
-    def plot_volatility(self, tbl_name: str) -> None:
+    def plot_volatility(self, tbl_name: str, window=252) -> None:
         """
         Plots volatility of given table as rolling std of last 252 daily returns.
         :param tbl_name: name of the table.
@@ -108,7 +108,7 @@ class PlotHelper(object):
             return
 
         df['daily_ret'] = df['PX_LAST'].pct_change()
-        df['rolling_std'] = df['daily_ret'].rolling(252).std() * np.sqrt(252)
+        df['rolling_std'] = df['daily_ret'].rolling(window).std() * np.sqrt(window)
 
         fig, axe = plt.subplots(1, 1)
         axe.set_title('Volatility: {}'.format(info[1]))
