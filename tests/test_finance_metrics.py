@@ -6,7 +6,7 @@ class TestFinanceMetrics(unittest.TestCase):
         self.dbm = database_manager.DatabaseManager()
 
     def test_annual_return_bloom(self):
-        dic = finance_metrics.compute_annual_returns(self.dbm, True)
+        dic = finance_metrics.compute_annual_returns_from_daily_return(self.dbm, True)
 
         self.assertIsNotNone(dic)
         self.assertGreater(len(dic.keys()), 0)

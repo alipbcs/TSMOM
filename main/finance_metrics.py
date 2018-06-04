@@ -6,8 +6,10 @@ from main import database_manager
 import datetime
 from typing import Dict, Union, Tuple
 
+LOOKBACK_PERIOD = 252
 
-def compute_annual_returns(dbm: database_manager.DatabaseManager, for_bloom: bool) -> Dict[str, pd.DataFrame]:
+
+def compute_annual_returns_from_daily_return(dbm: database_manager.DatabaseManager, for_bloom: bool) -> Dict[str, pd.DataFrame]:
     """
     Computes annual returns for all assets.
     :param for_bloom: whether it is intended for bloom datasets or quandl.
