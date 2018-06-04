@@ -28,7 +28,7 @@ class TimeVaryingPortfolioStrategy(object):
         self.table_in_assets = []
         self.sigma_target = sigma_target
 
-    def aggregate_assets(self):
+    def __aggregate_assets(self):
         """
         Joins PX_LAST of all assets.
         """
@@ -68,9 +68,10 @@ class TimeVaryingPortfolioStrategy(object):
         self.aggregated_assets = agg_assets
         self.table_in_assets = table_present
 
-    def compute_annualized_returns(self):
+    def __compute_annualized_returns(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
-        Computes annualized retrurn and rolling standard deviation for lookback period.
+        Computes annualized return and rolling standard deviation for lookback period.
+        :return: tuple of daily return, annual return and rolling standard deviation of all assets. 
         """
         daily_ret = self.aggregated_assets.pct_change()
         annual_ret = self.aggregated_assets.pct_change(periods=LOOKBACK_PERIOD)
@@ -80,8 +81,12 @@ class TimeVaryingPortfolioStrategy(object):
         return daily_ret, annual_ret, rolling_std
 
     def pre_strategy(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        self.aggregate_assets()
-        daily_ret, annual_ret, rolling_std = self.compute_annualized_returns()
+        """
+        Prepares & computes the necessary variables needed before computating the strategy.  
+        :return: 
+        """
+        self.__aggregate_assets()
+        daily_ret, annual_ret, rolling_std = self.__compute_annualized_returns()
 
         return daily_ret, annual_ret, rolling_std
 
@@ -135,20 +140,22 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
         annual_ret_signed = (annual_ret > 0)
         annual_ret_signed = (annual_ret_signed * 2) - 1
 
-        rho_bar_list = []
+        cf_list = []
 
         for t in range(annual_ret.shape[0]):
             curr_date = annual_ret.index[t]
             annual_ret_upto_curr = annual_ret[annual_ret.index <= curr_date]
 
             assets_present = annual_ret.columns[annual_ret.iloc[t].notnull()]
-            print('{}- {}'.format(t, assets_present.shape[0]))
+
+            if t % 100 == 0:
+                print('Progress: {0:.2f}%'.format(t / self.n_t.shape[0]))
 
             annual_ret_upto_curr_assets = annual_ret_upto_curr[assets_present]
             annual_ret_upto_curr_assets = annual_ret_upto_curr_assets.dropna(how='all')
 
             if annual_ret_upto_curr_assets.shape[0] < 2 or annual_ret_upto_curr_assets.shape[1] < 2:
-                rho_bar_list.append(1)
+                cf_list.append(1)
                 continue
 
             annual_ret_upto_curr_assets_signed = annual_ret_upto_curr_assets > 0
@@ -167,15 +174,21 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
 
             N = self.n_t[t]
             # N = asset_corr.shape[0]
-            rho_bar = (asset_corr * co_sign).sum() / (N * (N - 1))
-            cf_t = np.sqrt(N / (1 + ((N - 1) * rho_bar)))
+            rho_bar = ((asset_corr * co_sign).sum() - asset_corr.shape[0]) / (N * (N - 1))
+            temp = N / (1 + ((N - 1) * rho_bar))
 
-            rho_bar_list.append(cf_t)
+            if temp < 0:
+                print('Warning: negative value encountered for taking square root.')
+                cf_list.append(1)
+                continue
+
+            cf_t = np.sqrt(temp)
+            cf_list.append(cf_t)
 
         asset_weight = self.sigma_target * annual_ret_signed / rolling_std
         asset_weight = asset_weight.shift(1)
 
         portfolio_return = (asset_weight * daily_ret).sum(axis=1)
-        portfolio_return = portfolio_return.div(self.n_t * np.array(rho_bar_list), axis=0)
+        portfolio_return = portfolio_return.div(self.n_t * np.array(cf_list), axis=0)
 
         return portfolio_return
