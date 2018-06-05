@@ -167,7 +167,7 @@ class DatabaseManager(object):
                 result = self.con.execute('''SELECT tbl_name FROM sqlite_master 
                                           WHERE type='table' and 
                                           tbl_name LIKE '{}' ESCAPE '\\' '''.format(
-                    'quandl%\_' + quandl_symbol + '1_OR')
+                                                'quandl%\_' + quandl_symbol + '1_OR')
                 )
 
                 tbl_quandl = result.fetchone()
@@ -371,18 +371,19 @@ class DatabaseManager(object):
                                       'Softs', 'Precious Metal', 'Meat', 'Metal'])
 
                 cursor = self.con.execute('''SELECT table_name, contract_name
-                                    FROM bloom_info
-                                    WHERE type=? and subtype=?''', (asset_type, asset_subtype))
+                                            FROM bloom_info
+                                            WHERE type=? and subtype=?''', (asset_type, asset_subtype))
 
             else:
                 cursor = self.con.execute('''SELECT table_name, contract_name
-                                    FROM bloom_info
-                                    WHERE type=? ''', (asset_type,))
+                                            FROM bloom_info
+                                            WHERE type=? ''', (asset_type,))
 
             result = cursor.fetchall()
 
             if result is not None:
                 df = pd.DataFrame(result, columns=['table_name', 'contract_name'])
+                df['quandl_table_name'] = [self.bloom_to_qunadl_dict.get(tbl) for tbl in df['table_name']]
                 df.set_index('table_name', inplace=True)
 
                 return df
