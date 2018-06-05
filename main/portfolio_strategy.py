@@ -103,10 +103,11 @@ class ConstantVolatilityStrategy(TimeVaryingPortfolioStrategy):
         daily_ret, annual_ret, rolling_std = super().pre_strategy()
 
         asset_weight = self.sigma_target / rolling_std
+        asset_weight = asset_weight.div(self.n_t, axis=0)
         asset_weight = asset_weight.shift(1)
 
         portfolio_return = (asset_weight * daily_ret).sum(axis=1)
-        portfolio_return = portfolio_return.div(self.n_t, axis=0)
+        # portfolio_return = portfolio_return.div(self.n_t, axis=0)
 
         return portfolio_return, asset_weight
 
@@ -122,10 +123,11 @@ class TSMOMStrategy(TimeVaryingPortfolioStrategy):
         annual_ret = (annual_ret * 2) - 1
 
         asset_weight = self.sigma_target * annual_ret / rolling_std
+        asset_weight = asset_weight.div(self.n_t, axis=0)
         asset_weight = asset_weight.shift(1)
 
         portfolio_return = (asset_weight * daily_ret).sum(axis=1)
-        portfolio_return = portfolio_return.div(self.n_t, axis=0)
+        # portfolio_return = portfolio_return.div(self.n_t, axis=0)
 
         return portfolio_return, asset_weight
 
@@ -186,9 +188,10 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
             cf_list.append(cf_t)
 
         asset_weight = self.sigma_target * annual_ret_signed / rolling_std
+        asset_weight = asset_weight.div(self.n_t * np.array(cf_list), axis=0)
         asset_weight = asset_weight.shift(1)
 
         portfolio_return = (asset_weight * daily_ret).sum(axis=1)
-        portfolio_return = portfolio_return.div(self.n_t * np.array(cf_list), axis=0)
+        # portfolio_return = portfolio_return.div(self.n_t * np.array(cf_list), axis=0)
 
         return portfolio_return, asset_weight
