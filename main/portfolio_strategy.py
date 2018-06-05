@@ -151,7 +151,7 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
             assets_present = annual_ret.columns[annual_ret.iloc[t].notnull()]
 
             if t % 100 == 0:
-                print('Progress: {0:.2f}%'.format(t / self.n_t.shape[0]))
+                print('Progress: {0:.2f}%'.format(int(t * 100 / self.n_t.shape[0])))
 
             annual_ret_upto_curr_assets = annual_ret_upto_curr[assets_present]
             annual_ret_upto_curr_assets = annual_ret_upto_curr_assets.dropna(how='all')
@@ -174,8 +174,8 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
                     co_sign[i, j] = temp[i] * temp[j]
                     co_sign[j, i] = temp[i] * temp[j]
 
-            N = self.n_t[t]
-            # N = asset_corr.shape[0]
+            # N = self.n_t[t]
+            N = asset_corr.shape[0]
             rho_bar = ((asset_corr * co_sign).sum() - asset_corr.shape[0]) / (N * (N - 1))
             temp = N / (1 + ((N - 1) * rho_bar))
 
@@ -188,7 +188,8 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
             cf_list.append(cf_t)
 
         asset_weight = self.sigma_target * annual_ret_signed / rolling_std
-        asset_weight = asset_weight.div(self.n_t * np.array(cf_list), axis=0)
+        asset_weight = asset_weight.div(self.n_t, axis=0)
+        asset_weight = asset_weight.mul(np.array(cf_list), axis=0)
         asset_weight = asset_weight.shift(1)
 
         portfolio_return = (asset_weight * daily_ret).sum(axis=1)
