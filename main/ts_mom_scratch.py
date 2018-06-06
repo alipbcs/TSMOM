@@ -8,7 +8,11 @@ import numpy as np
 import pandas as pd
 from main import database_manager, portfolio_strategy, utilities
 import datetime
+import importlib
 
+importlib.reload(database_manager)
+importlib.reload(portfolio_strategy)
+importlib.reload(utilities)
 dbm = database_manager.DatabaseManager()
 
 assets = utilities.AssetMaster(dbm)
@@ -17,8 +21,27 @@ cvol_strat = portfolio_strategy.ConstantVolatilityStrategy(dbm, assets.asset_uni
 tsmom_strat = portfolio_strategy.TSMOMStrategy(dbm, assets.asset_universe, 0.4)
 cormom_strat = portfolio_strategy.CorrAdjustedTSMOMStrategy(dbm, assets.asset_universe, 0.4)
 
+rets, wts = tsmom_strat.compute_strategy()
 
-#dataset_names = dbm.bloom_dataset_names
+wts = wts.dropna(how='all')
+
+rets = rets[wts.index]
+
+import pyfolio as pf
+
+ret_annual = pf.timeseries.annual_return(rets.tz_localize('UTC'))
+vol_annual = pf.timeseries.annual_volatility(rets.tz_localize('UTC'))
+sharpe = ret_annual / vol_annual
+
+bmrk = rets.copy()
+bmrk[:] = np.random.rand()/10000
+wts = wts * 999999
+wts['cash'] = 1
+pf.create_full_tear_sheet(rets.tz_localize('UTC'), benchmark_rets=bmrk.tz_localize('UTC'),positions=wts*1000000)
+
+pf.create_position_tear_sheet(rets.tz_localize('UTC'), wts)
+
+#dataset_names = dbm.bloom_dataset_namesm
 #prev_table_name = dataset_names[0]
 #
 #cummulative_strategy, _ = dbm.get_table(prev_table_name)
