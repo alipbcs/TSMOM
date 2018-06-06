@@ -8,7 +8,7 @@ from typing import Tuple
 from abc import ABC, abstractmethod
 
 
-LOOKBACK_PERIOD = 252
+LOOKBACK_PERIOD_ANNUAL = 252
 
 
 class TimeVaryingPortfolioStrategy(object):
@@ -50,7 +50,7 @@ class TimeVaryingPortfolioStrategy(object):
             df_curr, _ = self.dbm.get_table(tbl_name)
 
             if df_curr is not None:
-                if df_curr.shape[0] < LOOKBACK_PERIOD + 1:
+                if df_curr.shape[0] < LOOKBACK_PERIOD_ANNUAL + 1:
                     i += 1
                     continue
 
@@ -68,30 +68,30 @@ class TimeVaryingPortfolioStrategy(object):
         self.aggregated_assets = agg_assets
         self.table_in_assets = table_present
 
-    def __compute_annualized_returns(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def __compute_annualized_returns(self, sd_window) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Computes annualized return and rolling standard deviation for lookback period.
         :return: tuple of daily return, annual return and rolling standard deviation of all assets. 
         """
         daily_ret = self.aggregated_assets.pct_change()
-        annual_ret = self.aggregated_assets.pct_change(periods=LOOKBACK_PERIOD)
-        rolling_std = daily_ret.rolling(LOOKBACK_PERIOD).std() * np.sqrt(LOOKBACK_PERIOD)
+        annual_ret = self.aggregated_assets.pct_change(periods=LOOKBACK_PERIOD_ANNUAL)
+        rolling_std = daily_ret.rolling(sd_window).std() * np.sqrt(LOOKBACK_PERIOD_ANNUAL)
         rolling_std[rolling_std < self.sigma_target / 10.0] = self.sigma_target / 10.0
 
         return daily_ret, annual_ret, rolling_std
 
-    def pre_strategy(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def pre_strategy(self, sd_window) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Prepares & computes the necessary variables needed before computating the strategy.  
         :return: 
         """
         self.__aggregate_assets()
-        daily_ret, annual_ret, rolling_std = self.__compute_annualized_returns()
+        daily_ret, annual_ret, rolling_std = self.__compute_annualized_returns(sd_window)
 
         return daily_ret, annual_ret, rolling_std
 
     @abstractmethod
-    def compute_strategy(self):
+    def compute_strategy(self, sd_window):
         pass
 
 
@@ -99,8 +99,8 @@ class ConstantVolatilityStrategy(TimeVaryingPortfolioStrategy):
     def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target):
         super().__init__(dbm, data, sigma_target)
 
-    def compute_strategy(self):
-        daily_ret, annual_ret, rolling_std = super().pre_strategy()
+    def compute_strategy(self, sd_window):
+        daily_ret, annual_ret, rolling_std = super().pre_strategy(sd_window)
 
         asset_weight = self.sigma_target / rolling_std
         asset_weight = asset_weight.div(self.n_t, axis=0)
@@ -116,8 +116,8 @@ class TSMOMStrategy(TimeVaryingPortfolioStrategy):
     def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target):
         super().__init__(dbm, data, sigma_target)
 
-    def compute_strategy(self):
-        daily_ret, annual_ret, rolling_std = super().pre_strategy()
+    def compute_strategy(self, sd_window):
+        daily_ret, annual_ret, rolling_std = super().pre_strategy(sd_window)
 
         annual_ret = annual_ret > 0
         annual_ret = (annual_ret * 2) - 1
@@ -136,8 +136,8 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
     def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target):
         super().__init__(dbm, data, sigma_target)
 
-    def compute_strategy(self):
-        daily_ret, annual_ret, rolling_std = super().pre_strategy()
+    def compute_strategy(self, sd_window):
+        daily_ret, annual_ret, rolling_std = super().pre_strategy(sd_window)
 
         annual_ret_signed = (annual_ret > 0)
         annual_ret_signed = (annual_ret_signed * 2) - 1
