@@ -27,6 +27,68 @@ class AssetMaster(object):
         self.asset_universe = self.equity_universe.append([self.bond_universe, \
                                                            self.currency_universe, \
                                                            self.commodity_universe])
+        
+    def paper_univ(self):
+         paper_list = ['FTSE 100 IDX FUT',
+                 'SWISS MKT IX FUTR',
+                 'E-Mini Russ 2000',
+                 'S&P 500 FUTURE',
+                 'NIKKEI 225 (OSE)',
+                 'CAC40 10 EURO FUT',
+                 'DAX INDEX FUTURE',
+                 'HANG SENG IDX FUT',
+                 'NASDAQ 100 E-MINI',
+                 'IBEX 35 INDX FUTR',
+                 'S&P/TSX 60 IX FUT',
+                 'AMSTERDAM IDX FUT',
+                 'FTSE/MIB IDX FUT',
+                 'EURO-BUND FUTURE',
+                 'US 10YR NOTE',
+                 'US LONG BOND(CBT)',
+                 'CAN 10YR BOND FUT',
+                 'JPN 10Y BOND(OSE)',
+                 'EURO-SCHATZ FUT',
+                 'EURO BUXL 30Y BND',
+                 'US 5YR NOTE (CBT)',
+                 'US 2YR NOTE (CBT)',
+                 'LONG GILT FUTURE',
+                 'EURO-BOBL FUTURE',               
+                 'CHF CURRENCY FUT',
+                 'JPN YEN CURR FUT',
+                 'BP CURRENCY FUT',
+                 'AUDUSD Crncy Fut',
+                 'C$ CURRENCY FUT',
+                 'EURO FX CURR FUT',                 
+                 'WHEAT FUTURE(CBT)',
+                 'CORN FUTURE',
+                 'SOYBEAN OIL FUTR',
+                 'SOYBEAN FUTURE',
+                 'SOYBEAN MEAL FUTR',
+                 'OAT FUTURE',
+                 'LUMBER FUTURE',
+                 'COTTON NO.2 FUTR',
+                 '''COFFEE 'C' FUTURE''',
+                 'COCOA FUTURE',
+                 'FCOJ-A FUTURE',
+                 'SUGAR #11 (WORLD)',
+                 'BRENT CRUDE FUTR',
+                 'GASOLINE RBOB FUT',
+                 'WTI CRUDE FUTURE',
+                 'NATURAL GAS FUTR',
+                 'NY Harb ULSD Fut',
+                 'SILVER FUTURE',
+                 'PALLADIUM FUTURE',
+                 'PLATINUM FUTURE',
+                 'GOLD 100 OZ FUTR',
+                 'COPPER FUTURE',
+                 'CATTLE FEEDER FUT',
+                 'LIVE CATTLE FUTR',
+                 'LEAN HOGS FUTURE']
+         return self.asset_universe[self.asset_universe.contract_name.isin(paper_list)]
+
+
+    
+    
 #    def all_asset(self):
 #        return self.asset_universe
 #    def bond_asset(self):
