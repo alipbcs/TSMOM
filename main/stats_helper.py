@@ -3,9 +3,7 @@ Helper functions for statistical computations.
 """
 from main import database_manager, finance_metrics
 import numpy as np
-import pandas as pd
-import datetime
-from typing import Tuple, Union, Dict, Optional
+from typing import Tuple, Dict, Optional
 from statsmodels.stats.weightstats import DescrStatsW
 
 

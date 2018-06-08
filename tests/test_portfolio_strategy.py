@@ -5,7 +5,7 @@ import unittest
 class TestPortfolioStrategires(unittest.TestCase):
     def setUp(self):
         self.dbm = database_manager.DatabaseManager()
-        self.df = self.dbm.get_assets_by_type('Equity')
+        self.df = self.dbm.get_assets_by_type('Interest Rates')
 
     def test_constant_vol_strategy(self):
         st_1 = portfolio_strategy.ConstantVolatilityStrategy(self.dbm, self.df, 0.4)
@@ -19,6 +19,7 @@ class TestPortfolioStrategires(unittest.TestCase):
 
         self.assertIsNotNone(res_2)
 
+    # @unittest.skip
     def test_corr_adjusted_tsmom_strategy(self):
         st_2 = portfolio_strategy.CorrAdjustedTSMOMStrategy(self.dbm, self.df, 0.4)
         res_2 = st_2.compute_strategy()
