@@ -42,8 +42,8 @@ class TREND(TradingRule):
         self.lookback = lookback
 
     def compute_rule(self):
-        # daily_ret_log = np.log(self.daily_ret)
-        daily_ret_log = self.daily_ret
+        daily_ret_log = np.log(self.daily_ret + 1)
+        # daily_ret_log = self.daily_ret
         df = pd.DataFrame()
         N = self.daily_ret.shape[0]
 
@@ -66,7 +66,6 @@ class TREND(TradingRule):
                 stats = DescrStatsW(data.iloc[i - self.lookback:i])
                 t_scores.append(stats.ttest_mean(0, 'larger')[0])
 
-            # df[asset.replace('PX_LAST_', '') + '_tstat'] = np.clip(t_scores, -1.0, 1.0)
             df[asset] = np.clip(t_scores, -1.0, 1.0)
 
         df['index'] = self.daily_ret.index

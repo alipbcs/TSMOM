@@ -85,8 +85,8 @@ class TimeVaryingPortfolioStrategy(ABC):
 
 
 class ConstantVolatilityStrategy(TimeVaryingPortfolioStrategy):
-    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target):
-        super().__init__(dbm, data, sigma_target)
+    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252):
+        super().__init__(dbm, data, sigma_target, lookback)
 
     def compute_strategy(self):
         super().pre_strategy()
@@ -101,14 +101,14 @@ class ConstantVolatilityStrategy(TimeVaryingPortfolioStrategy):
 
 
 class TSMOMStrategy(TimeVaryingPortfolioStrategy):
-    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float):
-        super().__init__(dbm, data, sigma_target)
+    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252):
+        super().__init__(dbm, data, sigma_target, lookback)
         self.trade_rule = None
 
     def pre_strategy(self) -> pd.DataFrame:
         super().pre_strategy()
 
-        # self.trade_rule = trade_rule.SIGN(self.aggregated_assets, self.daily_ret, self.lookback_window)
+        # self.trade_rule = trade_rule.SIGN(self.aggregated_assets, self.daily_ret, 252)
         self.trade_rule = trade_rule.TREND(self.aggregated_assets, self.daily_ret, self.lookback_window)
         trade_rule_out = self.trade_rule.compute_rule()
 
@@ -129,44 +129,48 @@ class TSMOMStrategy(TimeVaryingPortfolioStrategy):
 
 
 class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
-    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target):
-        super().__init__(dbm, data, sigma_target)
+    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target, lookback: int = 252):
+        super().__init__(dbm, data, sigma_target, lookback)
         self.trade_rule = None
 
     def pre_strategy(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         super().pre_strategy()
 
-        annual_ret = self.aggregated_assets.pct_change(periods=self.lookback_window)
+        # annual_ret = self.aggregated_assets.pct_change(periods=self.lookback_window)
+        daily_ret = self.aggregated_assets.pct_change(periods=1)
 
-        # self.trade_rule = trade_rule.SIGN(self.aggregated_assets, self.daily_ret, self.lookback_window)
-        self.trade_rule = trade_rule.TREND(self.aggregated_assets, self.daily_ret, self.lookback_window)
+        self.trade_rule = trade_rule.SIGN(self.aggregated_assets, self.daily_ret, 252)
+        # self.trade_rule = trade_rule.TREND(self.aggregated_assets, self.daily_ret, self.lookback_window)
         trade_rule_out = self.trade_rule.compute_rule()
 
-        return annual_ret, trade_rule_out
+        return daily_ret, trade_rule_out
 
     def compute_strategy(self):
-        annual_ret, trade_rule_out = self.pre_strategy()
+        daily_ret, trade_rule_out = self.pre_strategy()
 
         cf_list = []
 
-        for t in range(annual_ret.shape[0]):
-            curr_date = annual_ret.index[t]
-            annual_ret_upto_curr = annual_ret[annual_ret.index <= curr_date]
+        for t in range(daily_ret.shape[0]):
+            if t < 34:
+                cf_list.append(1)
+                continue
 
-            assets_present = annual_ret.columns[annual_ret.iloc[t].notnull()]
+            daily_ret_window = daily_ret.iloc[t - 34 + 1:t + 1]
+
+            assets_present = daily_ret.columns[daily_ret.iloc[t].notnull()]
 
             if t % 100 == 0:
                 print('Progress: {}%'.format(int(t * 100 / self.n_t.shape[0])))
 
-            annual_ret_upto_curr_assets = annual_ret_upto_curr[assets_present]
-            annual_ret_upto_curr_assets = annual_ret_upto_curr_assets.dropna(how='all')
+            daily_ret_window_assets_present = daily_ret_window[assets_present]
+            daily_ret_window_assets_present = daily_ret_window_assets_present.dropna(how='any')
             trade_rule_out_assets = trade_rule_out[assets_present]
 
-            if annual_ret_upto_curr_assets.shape[0] < 2 or annual_ret_upto_curr_assets.shape[1] < 2:
+            if daily_ret_window_assets_present.shape[0] < 2 or daily_ret_window_assets_present.shape[1] < 2:
                 cf_list.append(1)
                 continue
 
-            asset_corr = annual_ret_upto_curr_assets.corr().values
+            asset_corr = daily_ret_window_assets_present.corr().values
 
             co_trade_rule = np.eye(*asset_corr.shape)
 
@@ -179,10 +183,21 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
 
             N = asset_corr.shape[0]
             rho_bar = ((asset_corr * co_trade_rule).sum() - asset_corr.shape[0]) / (N * (N - 1))
+
+            if 1 + (N - 1) * rho_bar == 0:
+                print('Warning: Divide by zero.')
+                cf_list.append(1)
+                continue
+
             temp = N / (1 + ((N - 1) * rho_bar))
 
             if temp < 0:
                 print('Warning: negative value encountered for taking square root.')
+                cf_list.append(1)
+                continue
+
+            if np.isnan(temp) or np.isinf(temp):
+                print('Infinity or NaN')
                 cf_list.append(1)
                 continue
 
