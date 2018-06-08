@@ -17,15 +17,37 @@ dbm = database_manager.DatabaseManager()
 
 assets = utilities.AssetMaster(dbm)
 
-cvol_strat = portfolio_strategy.ConstantVolatilityStrategy(dbm, assets.asset_universe, 0.4)
-tsmom_strat = portfolio_strategy.TSMOMStrategy(dbm, assets.asset_universe, 0.4)
-cormom_strat = portfolio_strategy.CorrAdjustedTSMOMStrategy(dbm, assets.asset_universe, 0.4)
+cvol_strat = portfolio_strategy.ConstantVolatilityStrategy(dbm, assets.paper_univ(), 0.4)
+tsmom_strat = portfolio_strategy.TSMOMStrategy(dbm, assets.paper_univ(), 0.4)
+cormom_strat = portfolio_strategy.CorrAdjustedTSMOMStrategy(dbm, assets.paper_univ(), 0.4)
+sd_window = 34
+daily_port_rets, daily_wts, daily_ret = tsmom_strat.compute_strategy(sd_window)
 
-rets, wts = tsmom_strat.compute_strategy()
+end_date = '2018-05-08'
+# remove data after 5th May 2018 because not all series are updated
+daily_ret = daily_ret.truncate(after=end_date)
+daily_wts = daily_wts.truncate(after=end_date)
+daily_ret = daily_ret.truncate(after=end_date)
 
-wts = wts.dropna(how='all')
+daily_ret = daily_ret.dropna(how='all')
+daily_wts = daily_wts.dropna(how='all')
 
-rets = rets[wts.index]
+daily_index = (1 + daily_ret).cumprod()
+# careful this will create index for end of last month that is unknown
+monthly_index = daily_index.resample('BM').last()
+monthly_rets = monthly_index.pct_change()
+monthly_wts = daily_wts.resample('BM').last()
+# remove last month
+monthly_rets = monthly_rets[:-1]
+monthly_wts = monthly_wts[:-1]
+
+monthly_port_ret = (monthly_rets * monthly_wts.shift(1)).sum(axis=1)
+monthly_port_ret = monthly_port_ret[monthly_port_ret!=0]
+
+(1 + monthly_port_ret).cumprod()**(12/len(monthly_port_ret)) - 1
+
+daily_turnover = wts.diff().abs().sum(axis=1)
+daily_turnover.resample('M').sum().mean()
 
 import pyfolio as pf
 
@@ -35,11 +57,15 @@ sharpe = ret_annual / vol_annual
 
 bmrk = rets.copy()
 bmrk[:] = np.random.rand()/10000
-wts = wts * 999999
-wts['cash'] = 1
-pf.create_full_tear_sheet(rets.tz_localize('UTC'), benchmark_rets=bmrk.tz_localize('UTC'),positions=wts*1000000)
+wts_dlr = wts * 1000000
+wts_dlr['cash'] = 0
+leverage = wts_dlr.sum(axis=1)/1000000
+pf.create_full_tear_sheet(rets.tz_localize('UTC'), benchmark_rets=bmrk.tz_localize('UTC'), positions=wts_dlr, )
 
-pf.create_position_tear_sheet(rets.tz_localize('UTC'), wts)
+pf.create_position_tear_sheet(rets.tz_localize('UTC'), wts_dlr.tz_localize('UTC'), gross_lev=leverage)
+
+daily_turnover = wts.diff().abs().sum(axis=1)
+daily_turnover.index.month
 
 #dataset_names = dbm.bloom_dataset_namesm
 #prev_table_name = dataset_names[0]
