@@ -1,17 +1,17 @@
 """
-Helper functions for financial computations.
+Interface & Implementation of Portfolio Strategies.
 """
 import numpy as np
 import pandas as pd
 from main import database_manager
-from typing import Tuple
+from typing import Tuple, Optional
 from abc import ABC, abstractmethod
+from main import trade_rule
+
+# LOOKBACK_PERIOD = 252
 
 
-LOOKBACK_PERIOD = 252
-
-
-class TimeVaryingPortfolioStrategy(object):
+class TimeVaryingPortfolioStrategy(ABC):
     """
     Example Usage:
         st_1 = main.portfolio_strategy.ConstantVolatilityStrategy(dbm, df, 0.4)
@@ -20,13 +20,17 @@ class TimeVaryingPortfolioStrategy(object):
         st_2 = main.portfolio_strategy.TSMOMStrategy(dbm, df, 0.4)
         res_2 = st_2.compute_strategy()
     """
-    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float):
+
+    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252):
         self.dbm = dbm
         self.data = data
         self.n_t = None
         self.aggregated_assets = None
         self.table_in_assets = []
         self.sigma_target = sigma_target
+        self.daily_ret = None
+        self.volatility = None
+        self.lookback_window = lookback
 
     def __aggregate_assets(self):
         """
@@ -43,14 +47,11 @@ class TimeVaryingPortfolioStrategy(object):
         i = 1
 
         for t in range(1, self.data.shape[0]):
-            # if self.verbose:
-            #     print('Progress: {0:.2f}%'.format(i / self.data.shape[0]))
-
             tbl_name = self.data.index[t]
             df_curr, _ = self.dbm.get_table(tbl_name)
 
             if df_curr is not None:
-                if df_curr.shape[0] < LOOKBACK_PERIOD + 1:
+                if df_curr.shape[0] < self.lookback_window + 1:
                     i += 1
                     continue
 
@@ -68,27 +69,15 @@ class TimeVaryingPortfolioStrategy(object):
         self.aggregated_assets = agg_assets
         self.table_in_assets = table_present
 
-    def __compute_annualized_returns(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def pre_strategy(self):
         """
-        Computes annualized return and rolling standard deviation for lookback period.
-        :return: tuple of daily return, annual return and rolling standard deviation of all assets. 
-        """
-        daily_ret = self.aggregated_assets.pct_change()
-        annual_ret = self.aggregated_assets.pct_change(periods=LOOKBACK_PERIOD)
-        rolling_std = daily_ret.rolling(LOOKBACK_PERIOD).std() * np.sqrt(LOOKBACK_PERIOD)
-        rolling_std[rolling_std < self.sigma_target / 10.0] = self.sigma_target / 10.0
-
-        return daily_ret, annual_ret, rolling_std
-
-    def pre_strategy(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """
-        Prepares & computes the necessary variables needed before computating the strategy.  
-        :return: 
+        Prepares & computes the necessary variables needed before computing the strategy.
         """
         self.__aggregate_assets()
-        daily_ret, annual_ret, rolling_std = self.__compute_annualized_returns()
 
-        return daily_ret, annual_ret, rolling_std
+        self.daily_ret = self.aggregated_assets.pct_change()
+        self.volatility = self.daily_ret.rolling(self.lookback_window).std() * np.sqrt(self.lookback_window)
+        self.volatility[self.volatility < self.sigma_target / 10.0] = self.sigma_target / 10.0
 
     @abstractmethod
     def compute_strategy(self):
@@ -100,34 +89,41 @@ class ConstantVolatilityStrategy(TimeVaryingPortfolioStrategy):
         super().__init__(dbm, data, sigma_target)
 
     def compute_strategy(self):
-        daily_ret, annual_ret, rolling_std = super().pre_strategy()
+        super().pre_strategy()
 
-        asset_weight = self.sigma_target / rolling_std
+        asset_weight = self.sigma_target / self.volatility
         asset_weight = asset_weight.div(self.n_t, axis=0)
         asset_weight = asset_weight.shift(1)
 
-        portfolio_return = (asset_weight * daily_ret).sum(axis=1)
-        # portfolio_return = portfolio_return.div(self.n_t, axis=0)
+        portfolio_return = (asset_weight * self.daily_ret).sum(axis=1)
 
         return portfolio_return, asset_weight
 
 
 class TSMOMStrategy(TimeVaryingPortfolioStrategy):
-    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target):
+    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float):
         super().__init__(dbm, data, sigma_target)
+        self.trade_rule = None
+
+    def pre_strategy(self) -> pd.DataFrame:
+        super().pre_strategy()
+
+        # self.trade_rule = trade_rule.SIGN(self.aggregated_assets, self.daily_ret, self.lookback_window)
+        self.trade_rule = trade_rule.TREND(self.aggregated_assets, self.daily_ret, self.lookback_window)
+        trade_rule_out = self.trade_rule.compute_rule()
+
+        return trade_rule_out
 
     def compute_strategy(self):
-        daily_ret, annual_ret, rolling_std = super().pre_strategy()
+        trade_rule_out = self.pre_strategy()
 
-        annual_ret = annual_ret > 0
-        annual_ret = (annual_ret * 2) - 1
-
-        asset_weight = self.sigma_target * annual_ret / rolling_std
+        asset_weight = self.sigma_target * trade_rule_out
+        self.volatility.fillna(1.0, inplace=True)
+        asset_weight = asset_weight / self.volatility
         asset_weight = asset_weight.div(self.n_t, axis=0)
         asset_weight = asset_weight.shift(1)
 
-        portfolio_return = (asset_weight * daily_ret).sum(axis=1)
-        # portfolio_return = portfolio_return.div(self.n_t, axis=0)
+        portfolio_return = (asset_weight * self.daily_ret).sum(axis=1)
 
         return portfolio_return, asset_weight
 
@@ -135,12 +131,21 @@ class TSMOMStrategy(TimeVaryingPortfolioStrategy):
 class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
     def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target):
         super().__init__(dbm, data, sigma_target)
+        self.trade_rule = None
+
+    def pre_strategy(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        super().pre_strategy()
+
+        annual_ret = self.aggregated_assets.pct_change(periods=self.lookback_window)
+
+        # self.trade_rule = trade_rule.SIGN(self.aggregated_assets, self.daily_ret, self.lookback_window)
+        self.trade_rule = trade_rule.TREND(self.aggregated_assets, self.daily_ret, self.lookback_window)
+        trade_rule_out = self.trade_rule.compute_rule()
+
+        return annual_ret, trade_rule_out
 
     def compute_strategy(self):
-        daily_ret, annual_ret, rolling_std = super().pre_strategy()
-
-        annual_ret_signed = (annual_ret > 0)
-        annual_ret_signed = (annual_ret_signed * 2) - 1
+        annual_ret, trade_rule_out = self.pre_strategy()
 
         cf_list = []
 
@@ -151,32 +156,29 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
             assets_present = annual_ret.columns[annual_ret.iloc[t].notnull()]
 
             if t % 100 == 0:
-                print('Progress: {0:.2f}%'.format(int(t * 100 / self.n_t.shape[0])))
+                print('Progress: {}%'.format(int(t * 100 / self.n_t.shape[0])))
 
             annual_ret_upto_curr_assets = annual_ret_upto_curr[assets_present]
             annual_ret_upto_curr_assets = annual_ret_upto_curr_assets.dropna(how='all')
+            trade_rule_out_assets = trade_rule_out[assets_present]
 
             if annual_ret_upto_curr_assets.shape[0] < 2 or annual_ret_upto_curr_assets.shape[1] < 2:
                 cf_list.append(1)
                 continue
 
-            annual_ret_upto_curr_assets_signed = annual_ret_upto_curr_assets > 0
-            annual_ret_upto_curr_assets_signed *= 2
-            annual_ret_upto_curr_assets_signed -= 1
-
             asset_corr = annual_ret_upto_curr_assets.corr().values
 
-            co_sign = np.eye(*asset_corr.shape)
+            co_trade_rule = np.eye(*asset_corr.shape)
 
-            for i in range(co_sign.shape[0]):
-                for j in range(i + 1, co_sign.shape[1]):
-                    temp = annual_ret_upto_curr_assets_signed.iloc[-1].values
-                    co_sign[i, j] = temp[i] * temp[j]
-                    co_sign[j, i] = temp[i] * temp[j]
+            for i in range(co_trade_rule.shape[0]):
+                for j in range(i + 1, co_trade_rule.shape[1]):
+                    # TODO
+                    temp = trade_rule_out_assets.iloc[t].values
+                    co_trade_rule[i, j] = temp[i] * temp[j]
+                    co_trade_rule[j, i] = temp[i] * temp[j]
 
-            # N = self.n_t[t]
             N = asset_corr.shape[0]
-            rho_bar = ((asset_corr * co_sign).sum() - asset_corr.shape[0]) / (N * (N - 1))
+            rho_bar = ((asset_corr * co_trade_rule).sum() - asset_corr.shape[0]) / (N * (N - 1))
             temp = N / (1 + ((N - 1) * rho_bar))
 
             if temp < 0:
@@ -187,12 +189,12 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
             cf_t = np.sqrt(temp)
             cf_list.append(cf_t)
 
-        asset_weight = self.sigma_target * annual_ret_signed / rolling_std
+        asset_weight = self.sigma_target * trade_rule_out / self.volatility
         asset_weight = asset_weight.div(self.n_t, axis=0)
         asset_weight = asset_weight.mul(np.array(cf_list), axis=0)
         asset_weight = asset_weight.shift(1)
 
-        portfolio_return = (asset_weight * daily_ret).sum(axis=1)
+        portfolio_return = (asset_weight * self.daily_ret).sum(axis=1)
         # portfolio_return = portfolio_return.div(self.n_t * np.array(cf_list), axis=0)
 
         return portfolio_return, asset_weight
