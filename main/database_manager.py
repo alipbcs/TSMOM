@@ -481,6 +481,10 @@ class DatabaseManager(object):
 
         df.drop_duplicates(inplace=True)
 
+        # remove data after 5th May 2018 because not all series are updated
+        end_date = '2018-05-08'
+        df = df.truncate(after=end_date, copy=False)
+
         return df, info
 
     def __get_table_quandl(self, tbl_name: str) -> Union[Tuple[pd.DataFrame, Tuple[str, str, str, str, str]], Tuple[None, None]]:

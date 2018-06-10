@@ -1,11 +1,14 @@
 from main import database_manager, portfolio_strategy
+import pandas as pd
 import unittest
 
 
 class TestPortfolioStrategires(unittest.TestCase):
     def setUp(self):
         self.dbm = database_manager.DatabaseManager()
-        self.df = self.dbm.get_assets_by_type('Interest Rates')
+        # self.df = self.dbm.get_assets_by_type('Interest Rates')
+        self.df = pd.DataFrame(self.dbm.bloom_dataset_names)
+        self.df.set_index(0, inplace=True)
 
     def test_constant_vol_strategy(self):
         st_1 = portfolio_strategy.ConstantVolatilityStrategy(self.dbm, self.df, 0.4)
