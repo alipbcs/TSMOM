@@ -390,6 +390,21 @@ class DatabaseManager(object):
 
         return None
 
+    def get_all_bloom_assets(self):
+        assets = []
+
+        for tbl in self.bloom_dataset_names:
+            df, info = self.get_table(tbl)
+
+            if df is not None:
+                assets.append((tbl, info[1]))
+
+
+        df = pd.DataFrame(assets, columns=['tbl_name', 'contract_name'])
+        df.set_index('tbl_name', inplace=True)
+
+        return df
+
     def __get_table_bloom(self, tbl_name: str) -> Union[Tuple[pd.DataFrame, Tuple[str, str, str, str, str]], Tuple[None, None]]:
         """
         Retrieves bloom table from database.
@@ -408,43 +423,47 @@ class DatabaseManager(object):
         info = self.get_info(tbl_name)
 
         if tbl_name == 'bloom_sm1':
-            df = df[df.index > datetime.datetime(1998, 1, 30)]
+            # df = df[df.index > datetime.datetime(1998, 1, 30)]
+            df = df[df.index >= datetime.datetime(1998, 9, 18)]
 
         elif tbl_name == 'bloom_xp1':
-            df = df[df.index > datetime.datetime(2001, 1, 2)]
+            df = df[df.index >= datetime.datetime(2001, 1, 2)]
+
+        elif tbl_name == 'bloom_rr1':
+            df = df[df.index >= datetime.datetime(1992, 6, 11)]
 
         elif tbl_name == 'bloom_er1':
-            df = df[df.index > datetime.datetime(1999, 1, 11)]
+            df = df[df.index >= datetime.datetime(1999, 1, 11)]
 
         elif tbl_name == 'bloom_ih1':
-            df = df[df.index > datetime.datetime(2005, 10, 10)]
+            df = df[df.index >= datetime.datetime(2005, 10, 10)]
 
         elif tbl_name == 'bloom_si1':
-            df = df[df.index > datetime.datetime(1986, 12, 2)]
+            df = df[df.index >= datetime.datetime(1986, 12, 2)]
 
         elif tbl_name == 'bloom_ec1':
-            df = df[df.index > datetime.datetime(1999, 1, 4)]
+            df = df[df.index >= datetime.datetime(1999, 1, 4)]
 
         elif tbl_name == 'bloom_nq1':
-            df = df[df.index > datetime.datetime(2000, 5, 22)]
+            df = df[df.index >= datetime.datetime(2000, 5, 22)]
 
         elif tbl_name == 'bloom_ub1':
-            df = df[df.index > datetime.datetime(2005, 9, 9)]
+            df = df[df.index >= datetime.datetime(2005, 9, 9)]
 
         elif tbl_name == 'bloom_xb1':
-            df = df[df.index > datetime.datetime(2006, 4, 21)]
+            df = df[df.index >= datetime.datetime(2006, 4, 21)]
 
         elif tbl_name == 'bloom_nv1':
-            df = df[df.index > datetime.datetime(2001, 8, 10)]
+            df = df[df.index >= datetime.datetime(2001, 8, 10)]
 
         elif tbl_name == 'bloom_sf1':
-            df = df[df.index > datetime.datetime(1986, 7, 18)]
+            df = df[df.index >= datetime.datetime(1986, 7, 18)]
 
         elif tbl_name == 'bloom_fb1':
-            df = df[df.index > datetime.datetime(1995, 6, 13)]
+            df = df[df.index >= datetime.datetime(1995, 6, 13)]
 
         elif tbl_name == 'bloom_g_1':
-            df = df[df.index > datetime.datetime(1995, 6, 13)]
+            df = df[df.index >= datetime.datetime(1995, 6, 13)]
 
         elif tbl_name == 'bloom_ff1':
             return None, None
@@ -483,7 +502,8 @@ class DatabaseManager(object):
 
         # remove data after 5th May 2018 because not all series are updated
         end_date = '2018-05-08'
-        df = df.truncate(after=end_date, copy=False)
+        # df = df.truncate(after=end_date)
+        df = df[df.index <= datetime.datetime(2018, 5, 8)]
 
         return df, info
 

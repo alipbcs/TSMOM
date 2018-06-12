@@ -17,12 +17,12 @@ class TestPortfolioStrategires(unittest.TestCase):
         self.assertIsNotNone(res_1)
 
     def test_tsmom_strategy(self):
-        st_2 = portfolio_strategy.TSMOMStrategy(self.dbm, self.df, 0.4)
+        st_2 = portfolio_strategy.TSMOMStrategy(self.dbm, self.df, 0.4, volatilty_estimator='yz')
         res_2 = st_2.compute_strategy()
 
         self.assertIsNotNone(res_2)
 
-    # @unittest.skip
+    @unittest.skip
     def test_corr_adjusted_tsmom_strategy(self):
         st_2 = portfolio_strategy.CorrAdjustedTSMOMStrategy(self.dbm, self.df, 0.4)
         res_2 = st_2.compute_strategy()

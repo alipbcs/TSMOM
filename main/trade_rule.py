@@ -43,11 +43,17 @@ class TREND(TradingRule):
 
     def compute_rule(self):
         daily_ret_log = np.log(self.daily_ret + 1)
-        # daily_ret_log = self.daily_ret
         df = pd.DataFrame()
         N = self.daily_ret.shape[0]
 
+        iter = 0
         for asset in daily_ret_log.columns:
+            print('TREND Progress: {}%'.format(int(iter * 100 / daily_ret_log.shape[1])))
+
+            if asset == 'PX_LAST_bloom_sm1':
+                i = 5 + 8
+                i = i * 5
+
             data = daily_ret_log[asset]
             first_not_null = 0
             t_scores = []
@@ -63,10 +69,18 @@ class TREND(TradingRule):
                     t_scores.append(0)
                     continue
 
-                stats = DescrStatsW(data.iloc[i - self.lookback:i])
+                stats = DescrStatsW(data.iloc[i - self.lookback + 1:i + 1])
+
+                if stats.std_mean == 0:
+                    print('Period of all zeroes for asset {} from {}'.format(asset, data.index[i - self.lookback + 1]))
+                    t_scores.append(0)
+                    continue
+
                 t_scores.append(stats.ttest_mean(0, 'larger')[0])
 
             df[asset] = np.clip(t_scores, -1.0, 1.0)
+
+            iter += 1
 
         df['index'] = self.daily_ret.index
         df.set_index('index', inplace=True)

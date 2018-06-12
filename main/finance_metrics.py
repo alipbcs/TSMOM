@@ -1,12 +1,60 @@
 """
 Helper functions for financial computations.
 """
+import numpy as np
 import pandas as pd
 from main import database_manager
-import datetime
+from datetime import datetime
 from typing import Dict, Union, Tuple
+import pyfolio as pf
+from scipy import stats
+
 
 LOOKBACK_PERIOD = 252
+
+
+def compute_portfolio_performance(daily_weight, daily_ret, start_date='1980-02-29', end_date='2018-5-8'):
+    try:
+        datetime.strptime(start_date, '%Y-%m-%d')
+        datetime.strptime(end_date, '%Y-%m-%d')
+
+    except ValueError:
+        print('Wrong date format, should be Y-m-d')
+        return
+
+    daily_ret = daily_ret[daily_ret.index > start_date]
+    daily_ret = daily_ret[daily_ret.index < end_date]
+
+    if daily_ret.shape[0] < 0:
+        raise ValueError('no data in specified time period.')
+        return
+
+    daily_weight = daily_weight[daily_weight.index > start_date]
+    daily_weight = daily_weight[daily_weight.index < end_date]
+
+    volatility = pf.timeseries.annual_volatility(daily_ret.apply(np.array).tz_localize('UTC'))
+
+    turnover = daily_weight.resample('BM').last()[:-1].diff().abs().sum(axis=1).mean()
+
+    performance_statistics = {}
+
+    # performance_statistics['average_return'] = ((daily_ret.mean() + 1) ** 252 - 1.0) * 100
+    performance_statistics['annual_return'] = pf.timeseries.annual_return(daily_ret.apply(np.array).tz_localize('UTC'))
+    performance_statistics['volatility'] = volatility * 100
+    performance_statistics['skew'] = stats.skew(daily_ret)
+    performance_statistics['kurtosis'] = stats.kurtosis(daily_ret)
+    performance_statistics['turnover'] = turnover
+    performance_statistics['sortino'] = pf.timeseries.sortino_ratio(daily_ret.apply(np.array).tz_localize('UTC'))
+    performance_statistics['calmar'] = pf.timeseries.calmar_ratio(daily_ret.apply(np.array).tz_localize('UTC'))
+    performance_statistics['avg_leverage'] = daily_weight.abs().sum(axis=1).mean()
+    performance_statistics['Sharpe'] = pf.timeseries.sharpe_ratio(daily_ret.apply(np.array).tz_localize('UTC'))
+    performance_statistics['max_drawdown'] = pf.timeseries.max_drawdown(daily_ret.apply(np.array).tz_localize('UTC'))
+    performance_statistics['common_sense_ratio'] = pf.timeseries.common_sense_ratio(daily_ret.apply(np.array).tz_localize('UTC'))
+    performance_statistics['omega_ratio'] = pf.timeseries.omega_ratio(daily_ret.apply(np.array).tz_localize('UTC'))
+    performance_statistics['tail_ratio'] = pf.timeseries.tail_ratio(daily_ret.apply(np.array).tz_localize('UTC'))
+
+
+    return performance_statistics
 
 
 def compute_annual_returns_from_daily_return(dbm: database_manager.DatabaseManager, for_bloom: bool) -> Dict[str, pd.DataFrame]:
@@ -34,7 +82,7 @@ def compute_annual_returns_from_daily_return(dbm: database_manager.DatabaseManag
 
 
 def compute_monthly_returns(dbm: database_manager.DatabaseManager, tbl_name: str) -> \
-        Union[Tuple[pd.DataFrame, Tuple[str, str, str, str, str], datetime.datetime], Tuple[None, None]]:
+        Union[Tuple[pd.DataFrame, Tuple[str, str, str, str, str], datetime], Tuple[None, None]]:
     """
     Computes compounded return for a month.
     :param dbm: A DatabaseManager instance.

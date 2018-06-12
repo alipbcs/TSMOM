@@ -7,8 +7,8 @@ from main import database_manager
 from typing import Tuple, Optional
 from abc import ABC, abstractmethod
 from main import trade_rule
+from main import volatility_estimator
 
-# LOOKBACK_PERIOD = 252
 
 
 class TimeVaryingPortfolioStrategy(ABC):
@@ -21,7 +21,8 @@ class TimeVaryingPortfolioStrategy(ABC):
         res_2 = st_2.compute_strategy()
     """
 
-    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252):
+    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252,
+                 volatilty_estimator: str = 'sd'):
         self.dbm = dbm
         self.data = data
         self.n_t = None
@@ -30,6 +31,7 @@ class TimeVaryingPortfolioStrategy(ABC):
         self.sigma_target = sigma_target
         self.daily_ret = None
         self.volatility = None
+        self.volatility_estimator = volatilty_estimator
         self.lookback_window_vol = lookback
 
     def __aggregate_assets(self):
@@ -69,6 +71,27 @@ class TimeVaryingPortfolioStrategy(ABC):
         self.aggregated_assets = agg_assets
         self.table_in_assets = table_present
 
+    def __compute_volatility(self):
+        if str.lower(self.volatility_estimator) == 'sd':
+            vol_est = volatility_estimator.VolatilitySD(self.daily_ret, self.lookback_window_vol, self.sigma_target)
+            return vol_est.compute()
+
+        elif str.lower(self.volatility_estimator) == 'yz':
+            vol_df = pd.DataFrame(index=self.aggregated_assets.index)
+
+            for asset in self.aggregated_assets.columns:
+                tbl_name = str.replace(asset, 'PX_LAST_', '')
+                df_curr, _ = self.dbm.get_table(tbl_name)
+
+                df_curr = df_curr.reindex(self.aggregated_assets.index, method='ffill')
+
+                vol_est = volatility_estimator.VolatilityYZ(self.lookback_window_vol, self.sigma_target, df_curr)
+                vol_df[asset] = vol_est.compute()
+
+            return vol_df
+        else:
+            raise ValueError('Unsupported Volatility Estimator.')
+
     def pre_strategy(self):
         """
         Prepares & computes the necessary variables needed before computing the strategy.
@@ -76,8 +99,9 @@ class TimeVaryingPortfolioStrategy(ABC):
         self.__aggregate_assets()
 
         self.daily_ret = self.aggregated_assets.pct_change()
-        self.volatility = self.daily_ret.rolling(self.lookback_window_vol).std() * np.sqrt(self.lookback_window_vol)
-        self.volatility[self.volatility < self.sigma_target / 10.0] = self.sigma_target / 10.0
+        self.volatility = self.__compute_volatility()
+        # self.volatility = self.daily_ret.rolling(self.lookback_window_vol).std() * np.sqrt(self.lookback_window_vol)
+        # self.volatility[self.volatility < self.sigma_target / 10.0] = self.sigma_target / 10.0
 
     @abstractmethod
     def compute_strategy(self):
@@ -85,8 +109,10 @@ class TimeVaryingPortfolioStrategy(ABC):
 
 
 class ConstantVolatilityStrategy(TimeVaryingPortfolioStrategy):
-    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252):
-        super().__init__(dbm, data, sigma_target, lookback)
+    def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252,
+                 volatilty_estimator: str = 'sd'):
+
+        super().__init__(dbm, data, sigma_target, lookback, volatilty_estimator)
 
     def compute_strategy(self):
         super().pre_strategy()
@@ -102,9 +128,11 @@ class ConstantVolatilityStrategy(TimeVaryingPortfolioStrategy):
 
 class TSMOMStrategy(TimeVaryingPortfolioStrategy):
     def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252,
-                 trade_rule_name: str = 'SIGN'):
-        super().__init__(dbm, data, sigma_target, lookback)
+                 volatilty_estimator: str = 'sd', trade_rule_name: str = 'SIGN'):
+
+        super().__init__(dbm, data, sigma_target, lookback, volatilty_estimator)
         self.trade_rule_name = trade_rule_name
+        self.lookback = lookback
 
     def pre_strategy(self) -> pd.DataFrame:
         super().pre_strategy()
@@ -126,20 +154,28 @@ class TSMOMStrategy(TimeVaryingPortfolioStrategy):
         trade_rule_out = self.pre_strategy()
 
         asset_weight = self.sigma_target * trade_rule_out
-        self.volatility.fillna(1.0, inplace=True)
         asset_weight = asset_weight / self.volatility
         asset_weight = asset_weight.div(self.n_t, axis=0)
-        asset_weight = asset_weight.shift(1)
 
-        portfolio_return = (asset_weight * self.daily_ret).sum(axis=1)
+        asset_weight_bm = asset_weight.resample('BM').last()
+        asset_weight_bm = asset_weight_bm.resample('B').last()
+        asset_weight_bm.fillna(method='ffill', inplace=True)
 
-        return portfolio_return, asset_weight
+        asset_weight_bm = asset_weight_bm.loc[asset_weight_bm.index.intersection(asset_weight.index)]
+        # asset_weight = asset_weight.shift(1)
+
+        # portfolio_return = (asset_weight * self.daily_ret).sum(axis=1)
+        portfolio_return = (asset_weight_bm * self.daily_ret).sum(axis=1)
+
+        return portfolio_return, asset_weight_bm
 
 
 class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
     def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252,
-                 lookback_corr:int = 34, trade_rule_name: str ='SIGN'):
-        super().__init__(dbm, data, sigma_target, lookback)
+                 volatilty_estimator: str = 'sd', lookback_corr:int = 34, trade_rule_name: str ='SIGN'):
+
+        super().__init__(dbm, data, sigma_target, lookback, volatilty_estimator)
+        self.lookback = lookback
         self.lookback_corr = lookback_corr
         self.trade_rule_name = trade_rule_name
 
@@ -222,8 +258,14 @@ class CorrAdjustedTSMOMStrategy(TimeVaryingPortfolioStrategy):
         asset_weight = self.sigma_target * trade_rule_out / self.volatility
         asset_weight = asset_weight.div(self.n_t, axis=0)
         asset_weight = asset_weight.mul(np.array(cf_list), axis=0)
-        asset_weight = asset_weight.shift(1)
+        #
+        # asset_weight = asset_weight.shift(1)
 
-        portfolio_return = (asset_weight * self.daily_ret).sum(axis=1)
+        asset_weight_bm = asset_weight.resample('BM').last()
+        asset_weight_bm = asset_weight_bm.resample('B').last()
+        asset_weight_bm.fillna(method='ffill', inplace=True)
 
-        return portfolio_return, asset_weight
+        # portfolio_return = (asset_weight * self.daily_ret).sum(axis=1)
+        portfolio_return = (asset_weight_bm * self.daily_ret).sum(axis=1)
+
+        return portfolio_return, asset_weight_bm
