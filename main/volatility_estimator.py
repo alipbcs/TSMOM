@@ -19,7 +19,7 @@ class VolatilitySD(Volatility):
         self.daily_ret = daily_ret
 
     def compute(self):
-        volatility = self.daily_ret.rolling(self.rolling_window).std() * np.sqrt(self.rolling_window)
+        volatility = self.daily_ret.rolling(self.rolling_window).std() * np.sqrt(252)
         volatility[volatility < self.sigma_target / 10.0] = self.sigma_target / 10.0
         volatility.fillna(1.0, inplace=True)
 

@@ -10,7 +10,6 @@ from main import trade_rule
 from main import volatility_estimator
 
 
-
 class TimeVaryingPortfolioStrategy(ABC):
     """
     Example Usage:
@@ -22,7 +21,7 @@ class TimeVaryingPortfolioStrategy(ABC):
     """
 
     def __init__(self, dbm: database_manager.DatabaseManager, data: pd.DataFrame, sigma_target: float, lookback: int = 252,
-                 volatilty_estimator: str = 'sd'):
+                 vol_estimator: str = 'sd'):
         self.dbm = dbm
         self.data = data
         self.n_t = None
@@ -31,7 +30,7 @@ class TimeVaryingPortfolioStrategy(ABC):
         self.sigma_target = sigma_target
         self.daily_ret = None
         self.volatility = None
-        self.volatility_estimator = volatilty_estimator
+        self.volatility_estimator = vol_estimator
         self.lookback_window_vol = lookback
 
     def __aggregate_assets(self):

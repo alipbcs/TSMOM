@@ -39,7 +39,7 @@ def compute_portfolio_performance(daily_weight, daily_ret, start_date='1980-02-2
     performance_statistics = {}
 
     # performance_statistics['average_return'] = ((daily_ret.mean() + 1) ** 252 - 1.0) * 100
-    performance_statistics['annual_return'] = pf.timeseries.annual_return(daily_ret.apply(np.array).tz_localize('UTC'))
+    performance_statistics['annual_return'] = pf.timeseries.annual_return(daily_ret.apply(np.array).tz_localize('UTC')) * 100
     performance_statistics['volatility'] = volatility * 100
     performance_statistics['skew'] = stats.skew(daily_ret)
     performance_statistics['kurtosis'] = stats.kurtosis(daily_ret)
@@ -52,7 +52,6 @@ def compute_portfolio_performance(daily_weight, daily_ret, start_date='1980-02-2
     performance_statistics['common_sense_ratio'] = pf.timeseries.common_sense_ratio(daily_ret.apply(np.array).tz_localize('UTC'))
     performance_statistics['omega_ratio'] = pf.timeseries.omega_ratio(daily_ret.apply(np.array).tz_localize('UTC'))
     performance_statistics['tail_ratio'] = pf.timeseries.tail_ratio(daily_ret.apply(np.array).tz_localize('UTC'))
-
 
     return performance_statistics
 
