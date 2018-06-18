@@ -5,12 +5,9 @@ import numpy as np
 import pandas as pd
 from main import database_manager
 from datetime import datetime
-from typing import Dict, Union, Tuple
+from typing import Optional
 import pyfolio as pf
 from scipy import stats
-
-
-LOOKBACK_PERIOD = 252
 
 
 def compute_portfolio_performance(daily_weight, daily_ret, start_date='1980-02-29', end_date='2018-5-8'):
@@ -56,88 +53,48 @@ def compute_portfolio_performance(daily_weight, daily_ret, start_date='1980-02-2
     return performance_statistics
 
 
-def compute_annual_returns_from_daily_return(dbm: database_manager.DatabaseManager, for_bloom: bool) -> Dict[str, pd.DataFrame]:
+def compute_annual_return_from_daily_return(dbm: database_manager.DatabaseManager, tbl: str, lookback: int = 252) -> Optional[pd.DataFrame]:
     """
-    Computes annual returns for all assets.
-    :param for_bloom: whether it is intended for bloom datasets or quandl.
+    Computes annual returns given asset.
+    :param lookback: amount of lookback period.
+    :param tbl: table to compute annual returns for.
     :param dbm: a DatabaseManager instance.
-    :return: dictionary containing annaul returns for bloom datasets
+    :return: Dataframe containing annual returns.
     """
-    d = {}
-
-    table_names = dbm.bloom_dataset_names if for_bloom else dbm.quandl_dataset_names
-
-    for tbl_name in table_names:
-        df, info = dbm.get_table(tbl_name)
-
-        if df is not None:
-            df['annual_ret'] = df['PX_LAST'].pct_change(periods=LOOKBACK_PERIOD)
-            df['annual_ret_sign'] = (df['annual_ret'] > 0)
-            df['annual_ret_sign'] *= 2
-            df['annual_ret_sign'] -= 1
-            d[tbl_name] = df[['annual_ret', 'annual_ret_sign']]
-
-    return d
-
-
-def compute_monthly_returns(dbm: database_manager.DatabaseManager, tbl_name: str) -> \
-        Union[Tuple[pd.DataFrame, Tuple[str, str, str, str, str], datetime], Tuple[None, None]]:
-    """
-    Computes compounded return for a month.
-    :param dbm: A DatabaseManager instance.
-    :param tbl_name: name of the table to compute monthly return for.
-    :return: tuple consisting of (monthly return, info for table, first day the asset was traded).
-    """
-    tbl, info = dbm.get_table(tbl_name)
+    df, _ = dbm.get_table(tbl)
+    annual_ret = pd.DataFrame()
 
     if tbl is None:
-        return None, None
+        return None
 
-    tbl.dropna(axis=0, inplace=True)
+    df['PX_LAST_forward_filled'] = df['PX_LAST'].fillna(method='ffill')
+    annual_ret['annual_ret'] = df['PX_LAST_forward_filled'].pct_change(periods=lookback)
+    annual_ret['Dates'] = df.index
+    annual_ret.set_index('Dates', inplace=True)
 
-    first_date = tbl.index[0]
-    last_date = tbl.index[-1]
-    prev_month = first_date.month
+    df.drop('PX_LAST_forward_filled', axis=1, inplace=True)
 
-    row_idx = 0
-    curr_date, prev_date = None, None
+    return annual_ret
 
-    monthly_returns = []
-    daily_ret = 0
-    monthly_ret = 0
 
-    while curr_date != last_date:
-        row_idx += 1
+def compute_compounded_monthly_return_from_daily_return(dbm: database_manager.DatabaseManager, tbl_name: str) -> \
+        Optional[pd.DataFrame]:
+    """
+    Computes compounded monthly return.
+    :param dbm: A DatabaseManager instance.
+    :param tbl_name: name of the table to compute monthly return for.
+    :return: monthly return
+    """
+    df, _ = dbm.get_table(tbl_name)
 
-        curr_date = tbl.index[row_idx]
+    if df is None:
+        return None
 
-        curr_month = curr_date.month
+    df['PX_LAST_forward_filled'] = df['PX_LAST'].fillna(method='ffill')
 
-        curr_price = tbl.iloc[row_idx]['PX_LAST']
-        prev_price = tbl.iloc[row_idx - 1]['PX_LAST']
+    tbl_daily_ret = df['PX_LAST_forward_filled'].pct_change()
+    monthly_ret = tbl_daily_ret.resample('BM').apply(lambda x: (x + 1).cumprod()[-1] - 1.0)
 
-        if curr_price == 0:
-            daily_ret = 0
-        elif prev_price == 0:
-            daily_ret = tbl.iloc[row_idx - 2]['PX_LAST']
-        else:
-            daily_ret = (curr_price / prev_price) - 1.0
+    df.drop('PX_LAST_forward_filled', axis=1, inplace=True)
 
-        monthly_ret = monthly_ret * (daily_ret + 1) if monthly_ret != 0 else daily_ret + 1
-
-        if curr_month != prev_month:
-            # remove compounding of last daily return
-            monthly_ret /= (daily_ret + 1)
-
-            monthly_returns.append((prev_date, monthly_ret - 1))
-
-            # reset for next month
-            monthly_ret = daily_ret + 1
-
-        prev_month = curr_month
-        prev_date = curr_date
-
-    df = pd.DataFrame(monthly_returns, columns=['Dates', 'Monthly_Return'])
-    df.set_index('Dates', inplace=True)
-
-    return df, info, first_date
+    return monthly_ret
