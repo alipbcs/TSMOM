@@ -149,6 +149,8 @@ class DatabaseManager(object):
         if not hasattr(self, 'type_to_table_dict'):
             self.type_to_table_dict = {}
             self.subtype_to_table_dict = {}
+            self.table_to_type_dict = {}
+            self.table_to_subtype_dict = {}
 
             self.__build_type_to_table_dict()
 
@@ -210,6 +212,7 @@ class DatabaseManager(object):
                     if self.bloom_to_qunadl_dict.get(tbl) is not None:
                         self.type_to_table_dict[info[3]].extend(self.bloom_to_qunadl_dict[tbl])
 
+                    self.table_to_type_dict[tbl] = info[3]
                     self.type_to_table_dict[info[3]].append(tbl)
 
                 if info[4] is not None:
@@ -219,6 +222,7 @@ class DatabaseManager(object):
                     if self.bloom_to_qunadl_dict.get(tbl) is not None:
                         self.subtype_to_table_dict[info[4]].extend(self.bloom_to_qunadl_dict[tbl])
 
+                    self.table_to_subtype_dict[tbl] = info[4]
                     self.subtype_to_table_dict[info[4]].append(tbl)
 
     def import_bloom_from_xlsx(self, verbose: bool = False) -> None:
@@ -398,7 +402,6 @@ class DatabaseManager(object):
 
             if df is not None:
                 assets.append((tbl, info[1]))
-
 
         df = pd.DataFrame(assets, columns=['tbl_name', 'contract_name'])
         df.set_index('tbl_name', inplace=True)

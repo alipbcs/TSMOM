@@ -32,7 +32,7 @@ class SIGN(TradingRule):
         annual_ret = annual_ret > 0
         annual_ret = (annual_ret * 2) - 1
 
-        return annual_ret
+        return annual_ret.astype('float64')
 
 
 class TREND(TradingRule):
@@ -49,10 +49,6 @@ class TREND(TradingRule):
         iter = 0
         for asset in daily_ret_log.columns:
             print('TREND Progress: {}%'.format(int(iter * 100 / daily_ret_log.shape[1])))
-
-            if asset == 'PX_LAST_bloom_sm1':
-                i = 5 + 8
-                i = i * 5
 
             data = daily_ret_log[asset]
             first_not_null = 0
