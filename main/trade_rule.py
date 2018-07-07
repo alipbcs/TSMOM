@@ -65,10 +65,10 @@ class TREND(TradingRule):
                     t_scores.append(0)
                     continue
 
-                stats = DescrStatsW(data.iloc[i - self.lookback + 1:i + 1])
+                stats = DescrStatsW(data.iloc[i - self.lookback:i])
 
                 if stats.std_mean == 0:
-                    print('Period of all zeroes for asset {} from {}'.format(asset, data.index[i - self.lookback + 1]))
+                    print('Period of all zeroes for asset {} from {}'.format(asset, data.index[i - self.lookback]))
                     t_scores.append(0)
                     continue
 
