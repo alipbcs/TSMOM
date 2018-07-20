@@ -4,6 +4,8 @@ Time-Series Momentum Strategies
 In this project various time-series momentum strategies are implemented. Performance characteristics (such as return, volatility, turnover, 
 transaction costs,...) of portfolios based on these strategies are then analyzed using historical data from futures contracts. 
 
+Following plots are produced using pyfolio (https://quantopian.github.io/pyfolio)
+
 ![Cumulative Returns](https://github.com/neizvestnyy27/TSMOM/blob/master/img/cumulative_returns.png)
 
 
