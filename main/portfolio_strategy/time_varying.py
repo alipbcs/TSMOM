@@ -175,8 +175,6 @@ class TimeVaryingPortfolioStrategy(ABC):
         :param asset_weight: dataframe containing asset weights from strategy.
         :return: dataframe containing rebalancing costs.
         """
-        rebalance_cost_temp = pd.DataFrame(index=asset_weight.index)
-
         asset_weight_bm = asset_weight.resample('BM').last()
         asset_weight_bm = asset_weight_bm.diff().abs() / 20.0
         asset_weight_b = asset_weight_bm.resample('B').last()
@@ -185,6 +183,8 @@ class TimeVaryingPortfolioStrategy(ABC):
         asset_weight_b = asset_weight_b.loc[asset_weight_b.index.intersection(asset_weight.index)]
         # asset_weight_bm = asset_weight_bm.reindex(asset_weight.index, method='ffill')
         asset_weight_b = asset_weight_b.fillna(0)
+
+        rebalance_cost_temp = pd.DataFrame(index=asset_weight_b.index)
 
         for asset in asset_weight_b.columns:
             tbl_name = str.replace(asset, 'PX_LAST_', '')

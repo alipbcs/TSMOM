@@ -367,46 +367,25 @@ class DatabaseManager(object):
         """
         cursor = None
 
-        assert(asset_type in ['Commodity', 'Equity', 'Interest Rates', 'Currency'])
+        if asset_subtype is not None:
+            cursor = self.con.execute('''SELECT table_name, contract_name
+                                        FROM bloom_info
+                                        WHERE type=? and subtype=?''', (asset_type, asset_subtype))
+        else:
+            cursor = self.con.execute('''SELECT table_name, contract_name
+                                        FROM bloom_info
+                                        WHERE type=? ''', (asset_type,))
 
-        if asset_type is not None:
-            if asset_subtype is not None:
-                assert(asset_subtype in ['Developed', 'Emerging', 'Grains', 'Energy', \
-                                      'Softs', 'Precious Metal', 'Meat', 'Metal'])
+        result = cursor.fetchall()
 
-                cursor = self.con.execute('''SELECT table_name, contract_name
-                                            FROM bloom_info
-                                            WHERE type=? and subtype=?''', (asset_type, asset_subtype))
+        if result is not None:
+            df = pd.DataFrame(result, columns=['table_name', 'contract_name'])
+            df['quandl_table_name'] = [self.bloom_to_qunadl_dict.get(tbl) for tbl in df['table_name']]
+            df.set_index('table_name', inplace=True)
 
-            else:
-                cursor = self.con.execute('''SELECT table_name, contract_name
-                                            FROM bloom_info
-                                            WHERE type=? ''', (asset_type,))
-
-            result = cursor.fetchall()
-
-            if result is not None:
-                df = pd.DataFrame(result, columns=['table_name', 'contract_name'])
-                df['quandl_table_name'] = [self.bloom_to_qunadl_dict.get(tbl) for tbl in df['table_name']]
-                df.set_index('table_name', inplace=True)
-
-                return df
+            return df
 
         return None
-
-    def get_all_bloom_assets(self):
-        assets = []
-
-        for tbl in self.bloom_dataset_names:
-            df, info = self.get_table(tbl)
-
-            if df is not None:
-                assets.append((tbl, info[1]))
-
-        df = pd.DataFrame(assets, columns=['tbl_name', 'contract_name'])
-        df.set_index('tbl_name', inplace=True)
-
-        return df
 
     def __get_table_bloom(self, tbl_name: str) -> Union[Tuple[pd.DataFrame, Tuple[str, str, str, str, str]], Tuple[None, None]]:
         """
@@ -542,45 +521,3 @@ class DatabaseManager(object):
             info = self.get_info(analogous_bloom[0])
 
         return df, info
-
-    def __get_table_join(self, tbl_name_1: str, tbl_name_2: str) -> Optional[pd.DataFrame]:
-        """
-        Retrieves inner join of two tables from database.
-        :param tbl_name_1: name of the left table in inner join.
-        :param tbl_name_2: name of the right table in inner join.
-        :return: join of tables as a pandas dataframe.
-
-        """
-        result = self.con.execute('''SELECT * FROM {} AS b, {} AS q
-                                    WHERE b.Dates = q.Date '''.format(tbl_name_1, tbl_name_2))
-        table = result.fetchall()
-
-        df = pd.DataFrame(table, columns=['Dates', 'PX_LAST', 'PX_OPEN', 'PX_HIGH',
-                                          'PX_LOW', 'Date', 'Open', 'High', 'Low',
-                                          'Settle', 'Volume', 'Prev_OI'])
-
-        if df.shape[0] == 0:
-            return None
-
-        df['Dates'] = pd.to_datetime(df['Dates'], format="%Y/%m/%d")
-        df.drop('Date', inplace=True, axis=1)
-        df.set_index('Dates', drop=False, inplace=True)
-
-        return df
-
-    def get_quandl_bloom_intersect(self) -> List[Tuple[pd.DataFrame, str, str]]:
-        """
-        Retrieves intersection of datasets in quandl & bloom.
-
-        :return: list of pandas dataframes, each being a join of intersection of bloom & quandl datasets.
-        """
-        df_ret = []
-
-        for tbl_quandl, tbl_bloom_list in self.quandl_to_bloom_dict.items():
-            for tbl_bloom in tbl_bloom_list:
-                joined_df = self.__get_table_join(tbl_quandl, tbl_bloom)
-
-                if joined_df is not None:
-                    df_ret.append((joined_df, tbl_quandl, tbl_bloom))
-
-        return df_ret

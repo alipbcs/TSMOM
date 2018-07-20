@@ -13,7 +13,7 @@ class CorrAdjustedTSMOMStrategy(time_varying.TimeVaryingPortfolioStrategy):
                  volatilty_estimator: str = 'sd',
                  lookback_corr:int = 34,
                  trade_rule_name: str ='SIGN',
-                 lookback_trend: int = 34,
+                 lookback_trend: int = 252,
                  include_transaction: bool = False):
 
         super().__init__(dbm, data, sigma_target, lookback_vol, volatilty_estimator, include_transaction)
@@ -60,7 +60,7 @@ class CorrAdjustedTSMOMStrategy(time_varying.TimeVaryingPortfolioStrategy):
 
             trade_rule_out_assets = self.trade_rule_out[non_zero_columns]
 
-            if daily_ret_window_assets_present.shape[0] < 5 or daily_ret_window_assets_present.shape[1] < 5:
+            if daily_ret_window_assets_present.shape[0] < 3 or daily_ret_window_assets_present.shape[1] < 3:
                 cf_list.append(1)
                 continue
 
@@ -106,7 +106,7 @@ class CorrAdjustedTSMOMStrategy(time_varying.TimeVaryingPortfolioStrategy):
         asset_weight_bm = asset_weight_bm.fillna(method='ffill')
         asset_weight_bm = asset_weight_bm.loc[asset_weight_bm.index.intersection(asset_weight.index)]
 
-        daily_ret_bm = self.daily_ret.loc[self.daily_ret.index.intersection(asset_weight.index)]
+        daily_ret_bm = self.daily_ret.loc[self.daily_ret.index.intersection(asset_weight_bm.index)]
         # portfolio_return = (asset_weight * self.daily_ret).sum(axis=1)
 
         portfolio_return = (asset_weight_bm * daily_ret_bm).sum(axis=1)
